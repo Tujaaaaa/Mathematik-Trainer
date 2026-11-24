@@ -4179,7 +4179,7 @@ const VH = (() => {
 })();
 
 // ---- gen/z7_formen_s3k3.js ----
-const APP_VERSION = "19.1";
+const APP_VERSION = "19.2";
 // ===================== Etappe 1 (v13): Formen-Verzeichnis, neue Aufgabenformen 3. Sek Kapitel 3 =====================
 "use strict";
 // Formen-Verzeichnis: Aufgaben mit gleichem Namen gelten als gleiche Form (nur andere Zahlen).
@@ -7379,19 +7379,20 @@ const BOSSE = ["👾", "🐉", "🤖", "👹", "🦖"];
 const note = (p, max) => Math.max(1, Math.min(6, Math.round((p / max * 5 + 1) * 2) / 2));
 function bossSeite(kid) {
   const k = KAP[kid]; if (!k) return startseite(); const j = JAHRE.find(x => x.id === k.jahr);
-  const gens = kapGens(kid); const area = h("div", {});
+  let gens = kapGens(kid), voll = true; const area = h("div", {});
   const boss = BOSSE[(k.nr - 1) % BOSSE.length];
   function start() {
     area.innerHTML = "";
+    const W = ukWahl(kid, "boss"); gens = W.gens.length ? W.gens : kapGens(kid); voll = W.voll;
     const best = ST.boss[kid] || {};
     const ch = h("div", { class: "chips" });
     [2, 3, 4].filter(s => gens.some(g => GEN[g].stufen.includes(s))).forEach(s => ch.append(h("button", { class: "chip", onclick: () => kampf(s) }, (s === 2 ? "Normal" : stufeName(s, gens)) + (best[s] ? ` · beste Note ${zf(best[s])}` : ""))));
-    area.append(h("div", { class: "panel" }, h("div", { class: "boss" }, boss), H("p", "", "Der Kapitel-Boss stellt dir <b>8 Aufgaben</b> aus allen Unterkapiteln. Du hast pro Aufgabe <b>einen Versuch</b>, Tipps gibt es keine. Jeder Punkt trifft den Boss. Mit Note 4 oder besser ist er besiegt."), h("label", { class: "l" }, "Schwierigkeit"), ch));
+    area.append(h("div", { class: "panel" }, h("div", { class: "boss" }, boss), H("p", "", "Der Kapitel-Boss stellt dir <b>8 Aufgaben</b> aus den gewählten Teilkapiteln. Du hast pro Aufgabe <b>einen Versuch</b>, Tipps gibt es keine. Jeder Punkt trifft den Boss. Mit Note 4 oder besser ist er besiegt."), ukWahlBox(kid, "boss", start), h("label", { class: "l" }, "Schwierigkeit"), ch));
   }
   function kampf(stufe) {
     const liste = []; const mix = R.shuffle(gens); for (let i = 0; i < 8; i++) liste.push(mix[i % mix.length]);
     let i = 0, punkte = 0, max = 0; const prot = [];
-    const aufg = liste.map(g => { try { return mitStufenName(erzeuge(g, genStufe(g, stufe))); } catch (e) { return null; } }).filter(Boolean);
+    const gesehen = new Set(); const aufg = liste.map(g => { for (let t = 0; t < 15; t++) { let a; try { a = mitStufenName(erzeuge(g, genStufe(g, stufe))); } catch (e) { continue; } if (!gesehen.has(a.frage)) { gesehen.add(a.frage); return a; } } return null; }).filter(Boolean);
     aufg.forEach(a => (max += a.punkte));
     const hp = h("div", { class: "hp" }, h("i", { style: { width: "100%" } }), h("b", {}, "")); const feld = h("div", {});
     const stand = () => { hp.firstChild.style.width = Math.max(0, 100 - 100 * punkte / max) + "%"; hp.lastChild.textContent = `Boss ${Math.max(0, max - punkte)} / ${max} · Aufgabe ${Math.min(i + 1, aufg.length)} von ${aufg.length}`; };
@@ -7407,13 +7408,13 @@ function bossSeite(kid) {
       feld.innerHTML = ""; feld.append(vw.el); vw.fokus();
     }
     function ende() {
-      const n = note(punkte, max); const sieg = n >= 4; trEreignis("boss", { note: n });
-      const b = ST.boss[kid] = ST.boss[kid] || {}; if (!b[stufe] || n > b[stufe]) b[stufe] = n; speichern();
+      const n = note(punkte, max); const sieg = n >= 4;
+      if (voll) { trEreignis("boss", { note: n }); const b = ST.boss[kid] = ST.boss[kid] || {}; if (!b[stufe] || n > b[stufe]) b[stufe] = n; } speichern();
       if (sieg) { konfetti(); addXP(10 * stufe * 4); }
       const tab = h("table", { class: "tbl" }, h("tr", {}, h("th", {}, "Nr."), h("th", {}, "Aufgabe"), h("th", {}, "Punkte"), h("th", {}, "")));
       prot.forEach((x, k2) => tab.append(h("tr", {}, h("td", {}, k2 + 1), h("td", {}, x.a.titel), h("td", {}, `${x.p} / ${x.a.punkte}`), h("td", {}, h("button", { class: "btn sm ghost", onclick: () => dialog(h("div", {}, H("div", "frage", x.a.frage), x.a.figur ? H("div", "figwrap", x.a.figur) : null, h("h2", { style: { marginTop: "12px" } }, "Lösungsweg"), wegHtml(x.a.weg)), [{ t: "Schliessen" }]) }, "Lösung")))));
       feld.innerHTML = ""; feld.append(h("div", { class: "panel" }, h("div", { class: "boss" }, sieg ? "🏆" : boss), h("h3", { style: { textAlign: "center" } }, sieg ? "Boss besiegt!" : "Der Boss hat gewonnen – versuch es nochmals!"),
-        h("div", { style: { textAlign: "center" } }, h("div", { class: "note-gross" }, zf(n)), h("div", { class: "small" }, `${punkte} von ${max} Punkten · Note = Punkte : Maximum · 5 + 1, auf halbe Noten gerundet`)),
+        h("div", { style: { textAlign: "center" } }, h("div", { class: "note-gross" }, zf(n)), h("div", { class: "small" }, `${punkte} von ${max} Punkten · Note = Punkte : Maximum · 5 + 1, auf halbe Noten gerundet`), voll ? null : h("div", { class: "small" }, "🏋️ Trainingsrunde mit Auswahl – zählt nicht für die Bestnote.")),
         h("div", { class: "tblwrap", style: { marginTop: "14px" } }, tab), h("div", { class: "row", style: { marginTop: "14px" } }, h("button", { class: "btn", onclick: start }, "Nochmals"), h("button", { class: "btn ghost", onclick: () => geh("#/k/" + kid) }, "Zum Kapitel"))));
     }
     naechste();
@@ -7437,6 +7438,26 @@ function lootInfo(scope) {
   const k = KAP[scope]; const uks = KAP[scope].uk.map(u => u[0]).filter(id => !UK[id].weg && sichtbar(id) && UK[id].gens.some(g => GEN[g]));
   const wahl = ((ST.lootWahl || {})[scope] || []).filter(id => uks.includes(id)); const aktiv = wahl.length ? wahl : uks;
   return { titel: "Mathe-Loot · " + k.titel, gens: [...new Set(aktiv.flatMap(id => UK[id].gens).filter(g => GEN[g]))], stufen: [1, 1, 2, 3, 3, 4], zurueck: ["Kapitel " + k.nr, "#/k/" + scope], rep: k.jahr, uks, aktiv };
+}
+// Auswahl der Teilkapitel für Boss und Escape Room. Gespeichert in ST.ukWahl["boss:2.2"] usw. (leer = alle)
+function ukWahl(kid, art) {
+  const uks = KAP[kid].uk.map(u => u[0]).filter(id => !UK[id].weg && sichtbar(id) && UK[id].gens.some(g => GEN[g]));
+  const w = ((ST.ukWahl || {})[art + ":" + kid] || []).filter(id => uks.includes(id)); const aktiv = w.length ? w : uks;
+  return { uks, aktiv, voll: aktiv.length === uks.length, gens: [...new Set(aktiv.flatMap(id => UK[id].gens).filter(g => GEN[g]))] };
+}
+function ukWahlBox(kid, art, wieder) {
+  const W = ukWahl(kid, art); if (W.uks.length < 2) return null;
+  const box = h("div", { class: "loot-wahl uk-wahl", "aria-label": "Teilkapitel wählen" });
+  const fb = h("span", { class: "small", role: "status" });
+  const setz = neu => { ST.ukWahl = ST.ukWahl || {}; ST.ukWahl[art + ":" + kid] = neu.length === W.uks.length ? [] : neu; speichern(); wieder(); };
+  const chips = W.uks.map(id => { const an = W.aktiv.includes(id);
+    return h("button", { type: "button", class: "chip" + (an ? " on" : ""), "aria-pressed": String(an), title: UK[id].titel,
+      onclick: () => { const neu = an ? W.aktiv.filter(x => x !== id) : W.uks.filter(x => x === id || W.aktiv.includes(x)); if (!neu.length) { fb.textContent = "Mindestens ein Teilkapitel muss gewählt sein."; return; } setz(neu); } },
+      (an ? "☑ " : "☐ ") + id.slice(2) + " " + UK[id].titel); });
+  box.append(h("label", { class: "l" }, "Teilkapitel"), h("div", { class: "loot-chips" }, ...chips),
+    h("div", { class: "row", style: { alignItems: "center", gap: "10px", marginTop: "8px" } }, W.voll ? null : h("button", { type: "button", class: "btn sm ghost", onclick: () => setz([]) }, "Alle wählen"), fb),
+    W.voll ? null : H("p", "small uk-hinweis", "🏋️ <b>Trainingsrunde:</b> Mit einer Auswahl zählt das Resultat nicht für Bestnote bzw. Rekord, Leaderboard und die Boss- und Escape-Trophäen. Dafür alle Teilkapitel wählen."));
+  return box;
 }
 function lootAuswahl(scope, info) {
   const box = h("section", { class: "panel loot-wahl", "aria-label": "Teilkapitel für das Mathe-Loot wählen" });
@@ -7735,13 +7756,14 @@ function escapeSeite(kid) {
   const szId = pruef ? "gondel" : ESC_KAP[kid]; const sz = SZENARIEN[szId];
   if (!sz) return escapeAltSeite(kid);
   const k = pruef ? { nr: PRUEF[kid].kurz, titel: "Prüfungstraining" } : KAP[kid]; if (!k) return startseite(); const j = pruef ? null : JAHRE.find(x => x.id === k.jahr);
-  const gens = pruef ? [...new Set(PRUEF[kid].themen.flatMap(t => t.gens))].filter(g => GEN[g]) : kapGens(kid); const area = h("div", { class: "esc" });
+  let gens = pruef ? [...new Set(PRUEF[kid].themen.flatMap(t => t.gens))].filter(g => GEN[g]) : kapGens(kid), voll = true; const area = h("div", { class: "esc" });
   const reduziert = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const zeit = s => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
   let modus = lies("mts-escmodus", "ohne"), stufe = null;
 
   function startScreen() {
     area.innerHTML = "";
+    if (!pruef) { const W = ukWahl(kid, "esc"); gens = W.gens.length ? W.gens : kapGens(kid); voll = W.voll; }
     const best = ST.esc[kid] || {};
     const term = h("div", { class: "esc-term", role: "log", "aria-live": "polite" });
     const zeilen = sz.intro.slice(); let iv = null;
@@ -7754,6 +7776,7 @@ function escapeSeite(kid) {
     const renderM = () => { mBox.innerHTML = ""; ESC_MODI.forEach(m => mBox.append(h("button", { class: "esc-modus" + (m.id === modus ? " on" : ""), role: "radio", "aria-checked": String(m.id === modus), onclick: () => { modus = m.id; schreib("mts-escmodus", modus); renderM(); } }, h("b", {}, m.t), h("span", {}, m.id === "ohne" ? m.d : m.d.replace("Ein Countdown läuft", `Du hast ${sz.minuten} Minuten Zeit`))))); }; renderM();
     area.append(h("div", { class: "panel esc-start", style: { "--esc": sz.farbe } },
       h("div", { class: "esc-kopf" }, h("span", { class: "esc-ava" }, sz.avatar), h("div", {}, h("div", { class: "small" }, sz.name), h("h2", {}, sz.titel))), term,
+      pruef ? null : ukWahlBox(kid, "esc", () => { clearInterval(iv); startScreen(); }),
       h("label", { class: "l" }, "Schwierigkeit"), sChips, h("label", { class: "l" }, "Zeitmodus"), mBox,
       H("p", "small", `Tipps kosten 30 Sekunden. Insgesamt ${sz.objekte.length} Rätsel, dann wartet die Tür.`),
       h("button", { class: "btn go", onclick: () => { clearInterval(iv); spiel(); } }, "Escape Room starten")));
@@ -7860,11 +7883,11 @@ function escapeSeite(kid) {
     }
     function geschafft() {
       vorbei = true; clearInterval(iv);
-      const t = Math.round(verstrichen()); const zaehlt = !ueber;
-      const e = ST.esc[kid] = ST.esc[kid] || {}; const rekord = zaehlt && (!e[stufe] || t < e[stufe]); if (rekord) e[stufe] = t;
-      const xp = Math.round(30 * stufe * (modus === "profi" ? 1.5 : 1)); trEreignis("escape", { sz: szId, modus, zeit: t, limit, fehler: fehlerZ, tipps: tippZ }); addXP(xp);
+      const t = Math.round(verstrichen()); const zaehlt = !ueber && voll;
+      const e = ST.esc[kid] = ST.esc[kid] || {}; const rekord = zaehlt && (!e[stufe] || t < e[stufe]); if (rekord) e[stufe] = t; if (!Object.keys(e).length) delete ST.esc[kid];
+      const xp = Math.round(30 * stufe * (modus === "profi" ? 1.5 : 1)); if (voll) trEreignis("escape", { sz: szId, modus, zeit: t, limit, fehler: fehlerZ, tipps: tippZ }); addXP(xp);
       sag("fertig", true); svg.classList.add("offen");
-      setTimeout(() => { if (!reduziert) konfetti(); ende(true, `Deine Zeit: <b>${zeit(t)}</b>${strafe ? ` (inkl. ${strafe} s Strafzeit)` : ""}${rekord ? "<br>🏆 Neuer Rekord!" : ueber ? "<br>Über der Zeit – diesmal ohne Rekord." : ""}<br>+${xp} XP`); }, reduziert ? 0 : 1400);
+      setTimeout(() => { if (!reduziert) konfetti(); ende(true, `Deine Zeit: <b>${zeit(t)}</b>${strafe ? ` (inkl. ${strafe} s Strafzeit)` : ""}${rekord ? "<br>🏆 Neuer Rekord!" : !voll ? "<br>🏋️ Trainingsrunde mit Auswahl – zählt nicht für den Rekord." : ueber ? "<br>Über der Zeit – diesmal ohne Rekord." : ""}<br>+${xp} XP`); }, reduziert ? 0 : 1400);
     }
     function verloren() { vorbei = true; clearInterval(iv); uhr.textContent = "⏳ 0:00"; sag("zeitAus", true); flash(); ende(false, `Die Zeit ist abgelaufen. ${esc(sz.gegner)} hat diese Runde gewonnen.`); }
     function ende(ok, text) {
