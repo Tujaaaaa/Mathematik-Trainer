@@ -305,6 +305,7 @@ details.merk:not([open]){padding:12px 18px}
 .akz.on{border-color:var(--cur);box-shadow:0 0 0 1px var(--cur)}.akz:disabled{cursor:not-allowed}.akz:disabled .akz-dot{opacity:.4;filter:grayscale(.6)}
 html.hell .tr .tr-med,html.hell .tr-med,html.hell .tr-pop small{color:color-mix(in srgb,var(--med) 45%,#000)}
 .hell .esc-start h2,.hell .esc-name,.hell .esc-gross,.hell .esc-ziffern span.on{color:color-mix(in srgb,var(--esc) 50%,#000)}
+.loot-wahl{margin:12px 0}.loot-wahl h2{font-size:16px;margin:0 0 8px}.loot-chips{display:flex;flex-wrap:wrap;gap:8px}.loot-chips .chip{text-align:left}.loot-chips .chip.on{border-color:var(--cur);box-shadow:0 0 0 1px var(--cur)}
 .skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
 .sk{font:inherit;color:var(--ink);background:var(--sunk);border:2px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:4px;align-items:stretch;cursor:pointer;text-align:left}
 .sk b{font-size:13.5px;overflow-wrap:anywhere;hyphens:auto}.sk small{font-size:11px;color:var(--muted);line-height:1.3}
@@ -4178,7 +4179,7 @@ const VH = (() => {
 })();
 
 // ---- gen/z7_formen_s3k3.js ----
-const APP_VERSION = "19";
+const APP_VERSION = "19.1";
 // ===================== Etappe 1 (v13): Formen-Verzeichnis, neue Aufgabenformen 3. Sek Kapitel 3 =====================
 "use strict";
 // Formen-Verzeichnis: Aufgaben mit gleichem Namen gelten als gleiche Form (nur andere Zahlen).
@@ -7433,7 +7434,22 @@ const karte = (L, titel, cls = "") => `<div class="card r${L} ${cls}"><span clas
 function lootInfo(scope) {
   if (scope === "bms" || scope === "gymi") { const P0 = PRUEF[scope]; return { titel: "Loot " + P0.kurz, gens: [...new Set(P0.themen.flatMap(t => t.gens))].filter(g => GEN[g]), stufen: scope === "bms" ? [1, 2, 2, 3, 3, 3] : [1, 2, 3, 3, 4, 4], zurueck: ["BMS & Gymi", "#/pruef"] }; }
   if (scope[0] === "j") { const jj = JAHRE.find(x => x.id === scope.slice(1)); return { titel: "Mathe-Loot " + jj.titel, gens: jahrGens(jj.id), stufen: [1, 1, 2, 2, 3, 4], zurueck: [jj.titel, "#/j/" + jj.id] }; }
-  const k = KAP[scope]; return { titel: "Mathe-Loot · " + k.titel, gens: kapGens(scope), stufen: [1, 1, 2, 3, 3, 4], zurueck: ["Kapitel " + k.nr, "#/k/" + scope], rep: k.jahr };
+  const k = KAP[scope]; const uks = KAP[scope].uk.map(u => u[0]).filter(id => !UK[id].weg && sichtbar(id) && UK[id].gens.some(g => GEN[g]));
+  const wahl = ((ST.lootWahl || {})[scope] || []).filter(id => uks.includes(id)); const aktiv = wahl.length ? wahl : uks;
+  return { titel: "Mathe-Loot · " + k.titel, gens: [...new Set(aktiv.flatMap(id => UK[id].gens).filter(g => GEN[g]))], stufen: [1, 1, 2, 3, 3, 4], zurueck: ["Kapitel " + k.nr, "#/k/" + scope], rep: k.jahr, uks, aktiv };
+}
+function lootAuswahl(scope, info) {
+  const box = h("section", { class: "panel loot-wahl", "aria-label": "Teilkapitel für das Mathe-Loot wählen" });
+  const fb = h("span", { class: "small", role: "status" });
+  const chips = info.uks.map(id => { const an = info.aktiv.includes(id);
+    return h("button", { type: "button", class: "chip" + (an ? " on" : ""), "aria-pressed": String(an), title: UK[id].titel,
+      onclick: () => { const neu = info.aktiv.includes(id) ? info.aktiv.filter(x => x !== id) : info.uks.filter(x => x === id || info.aktiv.includes(x));
+        if (!neu.length) { fb.textContent = "Mindestens ein Teilkapitel muss gewählt sein."; return; }
+        ST.lootWahl = ST.lootWahl || {}; ST.lootWahl[scope] = neu.length === info.uks.length ? [] : neu; speichern(); render(); } },
+      (an ? "☑ " : "☐ ") + id.slice(2) + " " + UK[id].titel); });
+  const alle = h("button", { type: "button", class: "btn sm ghost", onclick: () => { ST.lootWahl = ST.lootWahl || {}; ST.lootWahl[scope] = []; speichern(); render(); } }, "Alle wählen");
+  box.append(h("h2", {}, "Welche Teilkapitel willst du spielen?"), h("div", { class: "loot-chips" }, ...chips), h("div", { class: "row", style: { alignItems: "center", gap: "10px", marginTop: "8px" } }, info.aktiv.length < info.uks.length ? alle : null, fb));
+  return box;
 }
 function lootSeite(scope) {
   const info = lootInfo(scope); if (!info.gens.length) return startseite();
@@ -7453,7 +7469,7 @@ function lootSeite(scope) {
   AUFRAEUMEN.push(() => document.body.style.removeProperty("--cur"));
   function neu() {
     const L = S.lvl; let gens = info.gens, rep = false;
-    if (info.rep && R.chance(0.2)) { const andere = jahrGens(info.rep).filter(g => !info.gens.includes(g)); if (andere.length) { gens = andere; rep = true; } }
+    if (info.rep && R.chance(0.2)) { const andere = jahrGens(info.rep).filter(g => !info.gens.includes(g) && !kapGens(scope).includes(g)); if (andere.length) { gens = andere; rep = true; } }
     let stufe = rep ? Math.min(2, info.stufen[L]) : info.stufen[L];
     const pool = gens.filter(g => GEN[g].stufen.includes(stufe)); const gid = R.pick(pool.length ? pool : gens);
     let a; try { a = mitStufenName(erzeuge(gid, genStufe(gid, stufe))); } catch (e) { return setTimeout(neu, 0); }
@@ -7474,6 +7490,7 @@ function lootSeite(scope) {
   const reset = h("button", { class: "btn sm ghost", onclick: async () => { if ((await dialog("Willst du diesen Loot-Spielstand wirklich zurücksetzen?", [{ t: "Abbrechen", v: 0, cls: "ghost" }, { t: "Zurücksetzen", v: 1 }])) === 1) { ST.loot[scope] = undefined; speichern(); render(); } } }, "Spielstand zurücksetzen");
   return [kopf([["Start", "#/"], info.zurueck, ["Loot"]]), h("h1", {}, "🎴 " + info.titel, h("small", {}, "5 richtige Aufgaben schalten die nächste Seltenheit frei. Ab «Selten» gibt es keine Tipps mehr.")),
     h("section", { class: "xpwrap" }, h("div", { class: "xphead" }, rank, xpinfo), bar, ladder),
+    info.uks && info.uks.length > 1 ? lootAuswahl(scope, info) : null,
     h("div", { class: "layout" }, area, h("div", { class: "side" }, h("div", { class: "panel" }, h("h2", {}, "Rangkarten"), cards), h("div", { class: "panel" }, h("h2", {}, "Spielstand"), stats, h("div", { style: { marginTop: "10px" } }, reset))))];
 }
 
